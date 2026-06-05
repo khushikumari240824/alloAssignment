@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
+import { fileURLToPath } from "url";
+
+const workspaceRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: {
+    root: workspaceRoot,
+  },
 };
 
 export default nextConfig;

@@ -78,10 +78,10 @@ DIRECT_URL="postgres://username:password@hostname:5432/db_name?sslmode=require"
 npm install
 ```
 
-### Run Database Migrations
+### Push the Schema to PostgreSQL
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma db push
 ```
 
 ### Seed Sample Data
@@ -101,6 +101,26 @@ The application will be available at:
 ```text
 http://localhost:3000
 ```
+
+---
+
+## Deployment Notes
+
+For Vercel deployment, set these environment variables in the project settings:
+
+```env
+DATABASE_URL="your-production-postgres-url"
+DIRECT_URL="your-production-postgres-url"
+```
+
+After the first deploy, run the database setup once against production:
+
+```bash
+npx prisma db push
+npm run db:seed
+```
+
+The scheduled cleanup endpoint is configured in `vercel.json` and runs every 5 minutes at `/api/cron/cleanup`.
 
 ---
 
