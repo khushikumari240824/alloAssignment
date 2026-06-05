@@ -105,7 +105,6 @@ export default function CatalogPage() {
           <p>Stock by warehouse, reservations in flight, and a quick path into checkout.</p>
         </div>
         <div className="header-status">
-          <div className="badge-db">Live DB Connected</div>
           <button
             onClick={() => fetchProducts(true)}
             disabled={isRefreshing || loading}
