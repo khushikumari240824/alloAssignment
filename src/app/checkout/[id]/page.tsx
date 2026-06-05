@@ -298,7 +298,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
             </div>
             <div className="detail-row">
               <span className="detail-label">Fulfillment Warehouse</span>
-              <span className="detail-val" style={{ display: "flex", flexDir: "column", alignItems: "flex-end" }}>
+              <span className="detail-val" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
                 <div>{reservation.warehouseName}</div>
                 {reservation.warehouseLocation && (
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.15rem" }}>

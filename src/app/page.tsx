@@ -36,7 +36,7 @@ export default function CatalogPage() {
     try {
       const res = await fetch("/api/products", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch products");
-      const data = await res.parseJson ? await res.parseJson() : await res.json();
+      const data = await res.json();
       setProducts(data);
       setErrorMessage(null);
     } catch (err: any) {
@@ -129,7 +129,7 @@ export default function CatalogPage() {
       {/* Loading States */}
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "300px", flexDirection: "column", gap: "1rem" }}>
-          <div className="spinner" style={{ width: "2.5rem", height: "2.5rem", borderThickness: "3px" }}></div>
+          <div className="spinner" style={{ width: "2.5rem", height: "2.5rem" }}></div>
           <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>Loading live catalog and stock levels...</span>
         </div>
       ) : products.length === 0 ? (
