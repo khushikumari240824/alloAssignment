@@ -1,0 +1,205 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, RefreshCw, ShoppingBag } from "lucide-react";
+
+export interface StockLevelView {
+  warehouseId: string;
+  warehouseName: string;
+  location: string | null;
+  totalUnits: number;
+  reservedUnits: number;
+  availableUnits: number;
+}
+
+export interface ProductView {
+  id: string;
+  name: string;
+  sku: string;
+  description: string | null;
+  price: number;
+  imageUrl: string | null;
+  stockLevels: StockLevelView[];
+}
+
+const productImageMap: Record<string, string> = {
+  "KBD-ERG-01": "/product-keyboard.svg",
+  "MON-UW-34": "/product-monitor.svg",
+  "AUD-ANC-90": "/product-headphones.svg",
+  "DESK-PAD-LTH": "/product-pad.svg",
+  "LIGHT-RGB-LED": "/product-lightbar.svg",
+};
+
+const currencyFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2,
+});
+
+export default function CatalogClient({ initialProducts }: { initialProducts: ProductView[] }) {
+  const router = useRouter();
+  const [products, setProducts] = useState<ProductView[]>(initialProducts);
+  const [loading] = useState(false);
+  const [reservingKey, setReservingKey] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const fetchProducts = async (showRefreshIndicator = false) => {
+    if (showRefreshIndicator) setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/products", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch products");
+      const data = await res.json();
+      setProducts(data);
+      setErrorMessage(null);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage("Could not refresh stock. Please retry after a moment.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleReserve = async (productId: string, warehouseId: string) => {
+    const key = `${productId}-${warehouseId}`;
+    setReservingKey(key);
+    setErrorMessage(null);
+
+    const idempotencyKey = crypto.randomUUID();
+
+    try {
+      const res = await fetch("/api/reservations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({
+          productId,
+          warehouseId,
+          quantity: 1,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 409) {
+        setErrorMessage("Stock depletion alert: The last unit was just reserved by another shopper. (Status 409 Conflict)");
+        fetchProducts();
+      } else if (!res.ok) {
+        throw new Error(data.error || "Failed to create reservation");
+      } else {
+        router.push(`/checkout/${data.reservation.id}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || "An unexpected error occurred during reservation.");
+    } finally {
+      setReservingKey(null);
+    }
+  };
+
+  return (
+    <div className="dashboard-container">
+      <header className="header">
+        <div className="header-title">
+          <div className="page-kicker">Inventory / Live Stock</div>
+          <h1>Allo Fulfillment Platform</h1>
+          <p>Stock by warehouse, reservations in flight, and a quick path into checkout.</p>
+        </div>
+        <div className="header-status">
+          <button
+            onClick={() => fetchProducts(true)}
+            disabled={isRefreshing || loading}
+            className="action-btn action-btn-secondary"
+            style={{ padding: "0.5rem 0.75rem", fontSize: "0.8rem", width: "auto", marginTop: 0 }}
+            title="Refresh Inventory Counts"
+          >
+            <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+            {isRefreshing ? "Refreshing..." : "Refresh Stock"}
+          </button>
+        </div>
+      </header>
+
+      {errorMessage && (
+        <div className="alert-banner alert-danger">
+          <AlertCircle size={20} className="shrink-0" />
+          <div>{errorMessage}</div>
+        </div>
+      )}
+
+      {products.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "4rem 2rem", background: "var(--panel-bg)", border: "1px dashed var(--panel-border)", borderRadius: "var(--radius-lg)" }}>
+          <ShoppingBag size={48} style={{ margin: "0 auto 1.5rem", color: "var(--text-muted)" }} />
+          <h3 style={{ fontSize: "1.25rem", fontWeight: "700", marginBottom: "0.5rem" }}>No products found</h3>
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", maxWidth: "400px", margin: "0 auto 1.5rem" }}>
+            The database appears to be empty. Run the migrations and seed script to populate products and warehouses.
+          </p>
+        </div>
+      ) : (
+        <main className="products-grid">
+          {products.map((product) => (
+            <article key={product.id} className="glass-card product-card">
+              <div className="product-image-container">
+                <img
+                  src={productImageMap[product.sku] || "/product-fallback.svg"}
+                  alt={product.name}
+                  className="product-img"
+                  loading="lazy"
+                />
+              </div>
+
+              <div className="product-info">
+                <div className="product-meta">
+                  <h2 className="product-title">{product.name}</h2>
+                  <span className="product-price">{currencyFormatter.format(product.price)}</span>
+                </div>
+                <span className="product-sku">{product.sku}</span>
+                <p className="product-description">{product.description}</p>
+
+                <div className="stock-levels-container">
+                  <h3 className="stock-title">Warehouse Inventory</h3>
+                  {product.stockLevels.map((stock) => {
+                    const key = `${product.id}-${stock.warehouseId}`;
+                    const isReserving = reservingKey === key;
+                    const isOutOfStock = stock.availableUnits <= 0;
+
+                    return (
+                      <div key={stock.warehouseId} className="stock-row">
+                        <div className="warehouse-info">
+                          <span className="warehouse-name">{stock.warehouseName}</span>
+                          <span className="warehouse-loc">{stock.location || "Default Location"}</span>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+                          <div className="stock-count-box">
+                            <div className="stock-available" style={{ color: isOutOfStock ? "var(--danger)" : "var(--text-primary)" }}>
+                              {isOutOfStock ? "Out of Stock" : `${stock.availableUnits} available`}
+                            </div>
+                            <div className="stock-breakdown">Total: {stock.totalUnits} | Held: {stock.reservedUnits}</div>
+                          </div>
+
+                          <button onClick={() => handleReserve(product.id, stock.warehouseId)} disabled={isOutOfStock || reservingKey !== null} className="reserve-btn">
+                            {isReserving ? (
+                              <>
+                                <div className="spinner"></div>
+                                <span>Holding...</span>
+                              </>
+                            ) : (
+                              "Reserve Unit"
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </article>
+          ))}
+        </main>
+      )}
+    </div>
+  );
+}
