@@ -210,14 +210,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
       {/* Notifications */}
       {successBanner && (
         <div className="alert-banner alert-success" style={{ marginBottom: "2rem" }}>
-          <CheckCircle size={20} className="flex-shrink-0" />
+          <CheckCircle size={20} className="shrink-0" />
           <div>{successBanner}</div>
         </div>
       )}
 
       {errorBanner && (
         <div className="alert-banner alert-danger" style={{ marginBottom: "2rem" }}>
-          <AlertTriangle size={20} className="flex-shrink-0" />
+          <AlertTriangle size={20} className="shrink-0" />
           <div>{errorBanner}</div>
         </div>
       )}

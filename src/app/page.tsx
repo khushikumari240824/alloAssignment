@@ -121,7 +121,7 @@ export default function CatalogPage() {
       {/* Global Errors */}
       {errorMessage && (
         <div className="alert-banner alert-danger">
-          <AlertCircle size={20} className="flex-shrink-0" />
+          <AlertCircle size={20} className="shrink-0" />
           <div>{errorMessage}</div>
         </div>
       )}
