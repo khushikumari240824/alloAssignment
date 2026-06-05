@@ -1,0 +1,50 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { releaseExpiredReservations } from "@/lib/reservations";
+
+export async function GET() {
+  try {
+    // Run lazy cleanup of all expired reservations in a transaction
+    await prisma.$transaction(async (tx) => {
+      await releaseExpiredReservations(tx);
+    });
+
+    const products = await prisma.product.findMany({
+      include: {
+        stockLevels: {
+          include: {
+            warehouse: true,
+          },
+        },
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    const formatted = products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      description: p.description,
+      price: p.price,
+      imageUrl: p.imageUrl,
+      stockLevels: p.stockLevels.map((sl) => ({
+        warehouseId: sl.warehouseId,
+        warehouseName: sl.warehouse.name,
+        location: sl.warehouse.location,
+        totalUnits: sl.totalUnits,
+        reservedUnits: sl.reservedUnits,
+        availableUnits: Math.max(0, sl.totalUnits - sl.reservedUnits),
+      })),
+    }));
+
+    return NextResponse.json(formatted);
+  } catch (error: any) {
+    console.error("GET /api/products error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to fetch products" },
+      { status: 500 }
+    );
+  }
+}
