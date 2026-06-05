@@ -31,6 +31,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const currencyFormatter = new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  });
 
   const fetchReservation = async () => {
     try {
@@ -326,7 +331,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
             <h2 className="summary-title">Order Summary</h2>
             <div className="summary-row">
               <span>{reservation.productName} (Qty {reservation.quantity})</span>
-              <span>${(reservation.productPrice * reservation.quantity).toFixed(2)}</span>
+              <span>{currencyFormatter.format(reservation.productPrice * reservation.quantity)}</span>
             </div>
             <div className="summary-row">
               <span>Fulfillment Fee (Standard)</span>
@@ -339,7 +344,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
 
             <div className="summary-total">
               <span>Grand Total</span>
-              <span>${(reservation.productPrice * reservation.quantity).toFixed(2)}</span>
+              <span>{currencyFormatter.format(reservation.productPrice * reservation.quantity)}</span>
             </div>
 
             {/* Actions */}

@@ -31,6 +31,12 @@ const productImageMap: Record<string, string> = {
   "LIGHT-RGB-LED": "/product-lightbar.svg",
 };
 
+const currencyFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2,
+});
+
 export default function CatalogPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -165,7 +171,7 @@ export default function CatalogPage() {
               <div className="product-info">
                 <div className="product-meta">
                   <h2 className="product-title">{product.name}</h2>
-                  <span className="product-price">${product.price.toFixed(2)}</span>
+                  <span className="product-price">{currencyFormatter.format(product.price)}</span>
                 </div>
                 <span className="product-sku">{product.sku}</span>
 
