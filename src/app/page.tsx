@@ -23,6 +23,14 @@ interface Product {
   stockLevels: StockLevel[];
 }
 
+const productImageMap: Record<string, string> = {
+  "KBD-ERG-01": "/product-keyboard.svg",
+  "MON-UW-34": "/product-monitor.svg",
+  "AUD-ANC-90": "/product-headphones.svg",
+  "DESK-PAD-LTH": "/product-pad.svg",
+  "LIGHT-RGB-LED": "/product-lightbar.svg",
+};
+
 export default function CatalogPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -147,7 +155,7 @@ export default function CatalogPage() {
           {products.map((product) => (
             <article key={product.id} className="glass-card product-card">
               <div className="product-image-container">
-                {product.imageUrl && !brokenImages[product.id] ? (
+                {(product.imageUrl && !brokenImages[product.id]) ? (
                   <img
                     src={product.imageUrl}
                     alt={product.name}
@@ -157,7 +165,7 @@ export default function CatalogPage() {
                   />
                 ) : (
                   <img
-                    src="/product-fallback.svg"
+                    src={productImageMap[product.sku] || "/product-fallback.svg"}
                     alt={product.name}
                     className="product-img"
                     loading="lazy"
