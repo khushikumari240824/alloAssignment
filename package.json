@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "prisma db seed",
-    "test:concurrency": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/test-concurrency.ts"
+    "test:concurrency": "node scripts/test-concurrency.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
