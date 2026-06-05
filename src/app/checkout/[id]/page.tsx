@@ -217,15 +217,15 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
 
       {errorBanner && (
         <div className="alert-banner alert-danger" style={{ marginBottom: "2rem" }}>
-          <AlertTriangle size={20} className="shrink-0" />
           <div>{errorBanner}</div>
         </div>
       )}
 
       <header className="header" style={{ marginBottom: "2rem", borderBottom: "none", paddingBottom: 0 }}>
         <div className="header-title">
+          <div className="page-kicker">Checkout / Reservation Hold</div>
           <h1>Secure Checkout</h1>
-          <p>Complete your payment before the inventory reservation timer expires</p>
+          <p>Confirm or release the hold before the timer runs out.</p>
         </div>
         <div className="header-status">
           {isPending && (
