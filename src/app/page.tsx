@@ -38,7 +38,6 @@ export default function CatalogPage() {
   const [reservingKey, setReservingKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
 
   const fetchProducts = async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setIsRefreshing(true);
@@ -155,22 +154,12 @@ export default function CatalogPage() {
           {products.map((product) => (
             <article key={product.id} className="glass-card product-card">
               <div className="product-image-container">
-                {(product.imageUrl && !brokenImages[product.id]) ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="product-img"
-                    loading="lazy"
-                    onError={() => setBrokenImages((current) => ({ ...current, [product.id]: true }))}
-                  />
-                ) : (
-                  <img
-                    src={productImageMap[product.sku] || "/product-fallback.svg"}
-                    alt={product.name}
-                    className="product-img"
-                    loading="lazy"
-                  />
-                )}
+                <img
+                  src={productImageMap[product.sku] || "/product-fallback.svg"}
+                  alt={product.name}
+                  className="product-img"
+                  loading="lazy"
+                />
               </div>
 
               <div className="product-info">

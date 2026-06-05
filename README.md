@@ -1,118 +1,146 @@
 # Allo Multi-Warehouse Inventory & Order Reservation Platform
 
-A Next.js application built with TypeScript, Prisma, and PostgreSQL that addresses checkout inventory race conditions by implementing temporary stock reservations.
+This project is a full-stack inventory reservation system built using **Next.js, TypeScript, Prisma, and PostgreSQL**. It is designed to solve one of the most common challenges in e-commerce platforms—**inventory race conditions during checkout**.
 
-This system guarantees that when a customer proceeds to checkout, units are temporarily held (e.g., for 10 minutes) while they complete payment. If payment succeeds, stock is permanently decremented. If the timer runs out or the checkout is cancelled, the reserved units are returned to the available stock pool.
-
----
-
-## ⚡ Concurrency & Race-Condition Safety
-
-At the core of this system is **correctness under concurrent requests**. If multiple shoppers attempt to reserve the last unit of a SKU simultaneously, exactly one must succeed.
-
-### Concurrency Strategy: Row-Level Database Locking
-To achieve this without adding latency or overhead from external distributed lock managers (like Redis), we leverage **PostgreSQL Transactions with Row-Level Locking**:
-
-1. **Transaction Isolation & Locks**: When a reservation request reaches `POST /api/reservations`, we initiate a Prisma database transaction.
-2. **Acquiring the Lock**: Before performing any check or write, we execute a raw SQL query inside the transaction to lock the exact product-warehouse inventory row:
-   ```sql
-   SELECT * FROM "StockLevel" 
-   WHERE "productId" = $1 AND "warehouseId" = $2 
-   FOR UPDATE;
-   ```
-3. **Blocking Concurrent Requests**: The `FOR UPDATE` clause instructs Postgres to lock this row. Any concurrent transaction attempting to lock or edit this same row is forced to wait until this transaction either **commits** or **rolls back**.
-4. **Validation & State Change**: Once the lock is acquired, we query the current values, calculate available stock (`totalUnits - reservedUnits`), increment the `reservedUnits` if stock is available, insert the `Reservation` record, and commit.
-5. **Result**: Concurrent requests are serialized. The first caller grabs the lock, checks availability, finds 1 unit, reserves it, and commits. The next queued caller resumes, reads the newly updated row, detects `available = 0`, and immediately aborts with a `409 Conflict`.
+When a customer starts the checkout process, the system temporarily reserves the requested stock for a limited time (for example, 10 minutes). This prevents other customers from purchasing the same item while payment is being completed. If the payment succeeds, the stock is permanently deducted. If the customer abandons the checkout or the reservation expires, the reserved stock is automatically released and made available again.
 
 ---
 
-## ⏱️ Reservation Expiry System
+## Handling Concurrent Reservations
 
-Abandoned checkouts are inevitable. If a customer closes their tab, the hold must release. We implement a **hybrid expiry mechanism** that balances real-time accuracy and performance:
+One of the key goals of this project is ensuring inventory accuracy when multiple customers try to purchase the same product at the same time.
 
-1. **Lazy / Just-In-Time (JIT) Cleanups (On-Read/On-Write)**:
-   Whenever a product list is requested (`GET /api/products`) or a reservation is attempted (`POST /api/reservations`), the backend runs a quick transaction sweep specifically targeting expired reservations. Expired reservations are updated to `RELEASED`, and their held stock is restored. This guarantees that stock availability is **always 100% correct when queried or written**, preventing false "Out of Stock" states.
-2. **Active Cron Cleaner (`/api/cron/cleanup`)**:
-   A scheduled Vercel Cron or background worker hits `/api/cron/cleanup` every minute to perform a global sweep of all expired pending reservations. This ensures stock is returned to the active pool even during periods of zero traffic.
+To achieve this, the application uses **PostgreSQL row-level locking inside database transactions**. Whenever a reservation request is received, the corresponding inventory record is locked using a `FOR UPDATE` query. This ensures that only one transaction can modify the stock at a time.
 
----
+For example, if only one unit of a product remains and multiple users attempt to reserve it simultaneously:
 
-## 🔑 Idempotency (Bonus)
+* The first request acquires the lock and reserves the item successfully.
+* Other requests wait until the transaction completes.
+* Once the lock is released, the waiting requests recheck the inventory and detect that no stock is available.
+* Those requests are then rejected with a conflict response.
 
-We implement idempotency for the **reserve** (`POST /api/reservations`) and **confirm** (`POST /api/reservations/:id/confirm`) endpoints:
-- **How it works**: The client can send a unique UUID string in the `Idempotency-Key` header.
-- **Database Cache**: We store keys in the `IdempotencyRequest` table along with the HTTP status code and response payload string.
-- **Deduplication**: On incoming requests, if a key is matched:
-  - The API skips execution of the side-effect (e.g., doesn't hold or deduct stock again).
-  - The API returns the identical cached JSON response with an `X-Cache-Lookup: HIT` header.
-  - If it is a new key, we execute the operation, store the resulting response in the database, and return it.
+This approach guarantees consistent inventory counts and prevents overselling.
 
 ---
 
-## 🛠️ Local Development Setup
+## Reservation Expiry Management
 
-### 1. Prerequisites
-- Node.js (v18 or higher)
-- A hosted PostgreSQL Database (e.g., [Neon.tech](https://neon.tech), [Supabase](https://supabase.com))
-  > [!IMPORTANT]
-  > The take-home exercise requires a real data layer. Create a free PostgreSQL instance on Neon or Supabase to get a connection string.
+Customers do not always complete their purchases. To handle abandoned checkouts, the platform automatically releases expired reservations using two complementary approaches.
 
-### 2. Environment Configuration
-Create a `.env` file in the root of the project:
+### 1. Just-in-Time Cleanup
+
+Whenever product information is requested or a new reservation is created, the system first checks for expired reservations. Any expired holds are marked as released, and the reserved inventory is returned to the available stock pool.
+
+This ensures that inventory information remains accurate whenever users interact with the system.
+
+### 2. Scheduled Background Cleanup
+
+A cron job runs periodically and performs a global cleanup of expired reservations. This ensures that stock is restored even when there is little or no traffic on the platform.
+
+Together, these mechanisms keep inventory availability accurate at all times.
+
+---
+
+## Idempotency Support
+
+To prevent duplicate operations caused by retries, network issues, or accidental multiple submissions, the reservation and confirmation APIs support **idempotency**.
+
+Clients can send a unique value through the `Idempotency-Key` header.
+
+When a request is received:
+
+* If the key already exists, the system returns the previously stored response without executing the operation again.
+* If the key is new, the operation is processed normally and the response is stored for future reference.
+
+This prevents duplicate reservations and repeated stock deductions while improving API reliability.
+
+---
+
+## Local Development Setup
+
+### Prerequisites
+
+* Node.js (v18 or higher)
+* PostgreSQL database (Neon, Supabase, or any PostgreSQL provider)
+
+### Environment Variables
+
+Create a `.env` file in the project root and add your database connection details:
+
 ```env
-# Connection URL with pooling for application queries
 DATABASE_URL="postgres://username:password@hostname:5432/db_name?sslmode=require"
-
-# Direct URL for migrations and seeds
 DIRECT_URL="postgres://username:password@hostname:5432/db_name?sslmode=require"
 ```
 
-### 3. Install Dependencies
+### Install Dependencies
+
 ```bash
 npm install
 ```
 
-### 4. Database Setup (Migrations & Seed)
-Run migrations to set up tables and compile the Prisma client:
+### Run Database Migrations
+
 ```bash
 npx prisma migrate dev --name init
 ```
 
-Seed the database with mock warehouses, products, and inventory stock distributions:
+### Seed Sample Data
+
 ```bash
 npm run db:seed
 ```
 
-### 5. Start the Application
-Run the Next.js dev server:
+### Start the Application
+
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+The application will be available at:
+
+```text
+http://localhost:3000
+```
 
 ---
 
-## 🧪 Concurrency Verification Test
+## Concurrency Testing
 
-To verify that the reservation logic is safe under high concurrent loads:
+To verify that the reservation system correctly handles concurrent requests:
 
-1. Ensure the Next.js local server is running (`npm run dev`).
-2. Run the concurrency test command in a separate terminal:
-   ```bash
-   npm run test:concurrency
-   ```
-3. **What this test does**:
-   - Resets the stock of a product to exactly **1 unit** total in the database.
-   - Clears out any active reservations for that product.
-   - Fires **10 parallel HTTP POST requests** to `/api/reservations` in the exact same millisecond.
-   - Asserts that **exactly 1 request** succeeds with `201 Created` while the other **9 requests** fail with `409 Conflict`.
-   - Confirms that the final database state shows exactly **1 reserved unit and 0 available units**.
+```bash
+npm run test:concurrency
+```
+
+The test performs the following actions:
+
+* Resets inventory for a selected product to a single available unit.
+* Removes existing reservations.
+* Sends 10 reservation requests simultaneously.
+* Verifies that only one request succeeds.
+* Confirms that all remaining requests fail due to insufficient stock.
+* Validates the final inventory state in the database.
+
+This test demonstrates that the application safely handles race conditions under high concurrency.
 
 ---
 
-## 🔍 Architecture Trade-offs & Future Considerations
+## Future Improvements
 
-If given more time, these enhancements would prepare this system for a larger, high-volume production scale:
-- **Redis Distributed Locking**: For extremely high-throughput systems, row-level locks on relational database rows can create lock queues that tie up database connection pools. Offloading lock management to an in-memory key-value store (like Redis/Redlock) keeps database transactions short and fast.
-- **Outbox Pattern for Events**: Instead of directly updating stock levels in HTTP request threads, we could emit `ReservationCreated` events to a message broker (RabbitMQ/SQS), maintaining a read-optimized cache (Redis) for stock queries and processing stock mutations asynchronously.
-- **Payment Webhook Integrations**: Integrate Stripe webhooks to listen for payment confirmations, triggering the confirmation endpoint safely in the background.
+If this system were expanded for larger production workloads, several enhancements could be considered:
+
+### Redis-Based Distributed Locking
+
+For very high traffic environments, distributed locks could reduce contention on database connections and improve scalability.
+
+### Event-Driven Architecture
+
+Using an Outbox Pattern together with message queues such as RabbitMQ or Amazon SQS would allow stock updates and reservation processing to be handled asynchronously.
+
+### Payment Gateway Integration
+
+Integrating payment providers such as Stripe would allow reservation confirmations to be triggered automatically through secure payment webhooks.
+
+---
+
+Overall, this project demonstrates how inventory reservations, expiration handling, concurrency control, and idempotent APIs can work together to create a reliable and scalable checkout experience while preventing overselling and maintaining accurate stock levels.
