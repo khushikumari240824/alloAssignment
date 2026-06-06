@@ -26,7 +26,7 @@ async function main() {
 
   const whCentral = await prisma.warehouse.create({
     data: {
-      name: "Warehouse Central",
+      name: "Warehouse Central 2", 
       location: "Bangalore, Karnataka",
     },
   });
